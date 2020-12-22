@@ -169,7 +169,6 @@ public class GameManager : MonoBehaviour
     /// </summary>
     public void LoseRound()
     {
-        _material.SetColor("_Color", Color.red);
         instance.OnLerpsTickEvent -= _RoundClock;
         instance.OnLerpsTickEvent += _FadeToLoserBackground;
         _meltdown.Play();
@@ -181,6 +180,7 @@ public class GameManager : MonoBehaviour
     /// </summary>
     public void WinRound()
     {
+        Save(Mathf.CeilToInt(_roundDuration / ((int)_gameDifficulty) * (int)_gameDifficulty));
         instance.OnLerpsTickEvent -= _RoundClock;
         ResetGame();
         instance.OnLerpsTickEvent += _FadeToWinnerBackground;
@@ -195,6 +195,55 @@ public class GameManager : MonoBehaviour
     {
         isPlaying = false;
         instance.OnLerpsTickEvent += _FadeInMenu;
+    }
+
+    /// <summary>
+    /// Loads the best score for the game
+    /// </summary>
+    public void LoadScore() => _bestScore.text = (PlayerPrefs.HasKey("best")) ? PlayerPrefs.GetString("best") : "Best Score:\nNone";
+
+    /// <summary>
+    /// Resets the local best score
+    /// </summary>
+    public void ResetScore()
+    {
+        PlayerPrefs.DeleteKey("best");
+        PlayerPrefs.Save();
+        LoadScore();
+    }
+
+    /// <summary>
+    /// Saves the highscore if it is higher
+    /// </summary>
+    /// <param name="_pScore"></param>
+    public void Save(int _pScore)
+    {
+        string _str = PlayerPrefs.HasKey("best") ? PlayerPrefs.GetString("best") : "Best Score:\nNone";
+        int _old = 999999;
+        if (_str != "")
+        {
+            try
+            {
+                _old = int.Parse(_str.Substring(0, _str.IndexOf(" ")));
+            }
+            catch(System.Exception _e)
+            {
+                _old = 999999;
+            }
+        }
+        if (_pScore < _old)
+        {
+            PlayerPrefs.SetString("best", $"Best Score:\n{_pScore} ({_gameDifficulty.ToString()})");
+            PlayerPrefs.Save();
+        }
+    }
+
+    /// <summary>
+    /// Closes the game
+    /// </summary>
+    public void Exit()
+    {
+        Application.Quit();
     }
 
     #endregion
@@ -233,6 +282,11 @@ public class GameManager : MonoBehaviour
     /// The canvas group for the control menu
     /// </summary>
     [SerializeField] private CanvasGroup _controlGroup = null;
+
+    /// <summary>
+    /// The text label for the best score display
+    /// </summary>
+    [SerializeField] private TMP_Text _bestScore = null;
 
     /// <summary>
     /// The duration label for the game-play
@@ -321,6 +375,7 @@ public class GameManager : MonoBehaviour
     {
         if (_type != ObjType.Manager) return;
         instance = this;
+        LoadScore();
     }
 
     /// <summary>
@@ -431,6 +486,7 @@ public class GameManager : MonoBehaviour
             }
             else
             {
+                _material.SetColor("_Color", Color.red);
                 instance.LoseRound();
             }
         }
@@ -497,6 +553,7 @@ public class GameManager : MonoBehaviour
         _mainGroup.alpha += (Time.deltaTime * 2f);
         if (_mainGroup.alpha >= 1f)
         {
+            LoadScore();
             _mainGroup.blocksRaycasts = true;
             _mainGroup.interactable = true;
             instance.OnLerpsTickEvent -= _FadeInMenu;

@@ -113,6 +113,7 @@ MonoBehaviour:
   _mainCamera: {fileID: 0}
   _mainGroup: {fileID: 0}
   _controlGroup: {fileID: 0}
+  _bestScore: {fileID: 0}
   _durationLabel: {fileID: 0}
   _meltdown: {fileID: 0}
   _gameDifficulty: 1
