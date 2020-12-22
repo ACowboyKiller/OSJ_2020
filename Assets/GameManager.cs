@@ -19,6 +19,11 @@ public class GameManager : MonoBehaviour
     /// </summary>
     public enum Difficulty { Easy = 1, Medium = 2, Hard = 3 };
 
+    /// <summary>
+    /// Three possible flag states for the cells in the grid
+    /// </summary>
+    public enum CellState { Normal, Flagged, Questioned };
+
     #endregion
 
     #region --------------------    Public Properties
@@ -90,9 +95,9 @@ public class GameManager : MonoBehaviour
     public int nearbyCount { get; set; } = 0;
 
     /// <summary>
-    /// Stores whether or not the cube is flagged
+    /// Stores the state of the cell
     /// </summary>
-    public bool isFlagged { get; private set; } = false;
+    public CellState state { get; private set; } = CellState.Normal;
 
     #endregion
 
@@ -113,6 +118,25 @@ public class GameManager : MonoBehaviour
         clearedCount = 0;
         _ConfigureGrid();
         instance.OnLerpsTickEvent += _FadeOutMenu;
+        instance.OnLerpsTickEvent += _StartGameTimer;
+    }
+
+    /// <summary>
+    /// Shows the controls page
+    /// </summary>
+    public void ShowControls()
+    {
+        instance.OnLerpsTickEvent += _FadeOutMenu;
+        instance.OnLerpsTickEvent += _FadeInControls;
+    }
+
+    /// <summary>
+    /// Hides the controls page
+    /// </summary>
+    public void HideControls()
+    {
+        instance.OnLerpsTickEvent += _FadeOutControls;
+        instance.OnLerpsTickEvent += _FadeInMenu;
     }
 
     /// <summary>
@@ -124,6 +148,7 @@ public class GameManager : MonoBehaviour
         _isClicked = true;
         nearbyCount = _CountNearby();
         _text.text = (nearbyCount > 0) ? nearbyCount.ToString() : "";
+        _text.color = instance._textColors.Evaluate(Mathf.Clamp(nearbyCount / 13f, 0f, 1f));
         GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         instance.OnLerpsTickEvent += _FadeOutCube;
         clearedCount++;
@@ -133,10 +158,10 @@ public class GameManager : MonoBehaviour
     /// <summary>
     /// Flags the cube
     /// </summary>
-    public void ToggleFlag()
+    public void ToggleStates()
     {
-        isFlagged = !isFlagged;
-        _material.SetColor("_Color", (isFlagged) ? Color.red : _defaultColor);
+        state = (state == CellState.Normal) ? CellState.Flagged : ((state == CellState.Flagged) ? CellState.Questioned : CellState.Normal);
+        _material.SetColor("_Color", (state == CellState.Normal) ? _defaultColor : ((state == CellState.Flagged) ? Color.red : Color.blue));
     }
 
     /// <summary>
@@ -144,11 +169,11 @@ public class GameManager : MonoBehaviour
     /// </summary>
     public void LoseRound()
     {
+        _material.SetColor("_Color", Color.red);
         instance.OnLerpsTickEvent -= _RoundClock;
-        Debug.Log("You lose");
+        instance.OnLerpsTickEvent += _FadeToLoserBackground;
         _meltdown.Play();
         ResetGame();
-        //  TODO:   Perform some cool animation
     }
 
     /// <summary>
@@ -157,8 +182,8 @@ public class GameManager : MonoBehaviour
     public void WinRound()
     {
         instance.OnLerpsTickEvent -= _RoundClock;
-        Debug.Log("You Win");
         ResetGame();
+        instance.OnLerpsTickEvent += _FadeToWinnerBackground;
         //  TODO:   Play some animation
         //  TODO:   Update leaderboard
     }
@@ -190,14 +215,24 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameObject _cubePrefab = null;
 
     /// <summary>
-    /// The main camera
+    /// The main camera's dolly
     /// </summary>
     [SerializeField] private Transform _cameraDolly = null;
 
     /// <summary>
+    /// The main camera
+    /// </summary>
+    [SerializeField] private Camera _mainCamera = null;
+
+    /// <summary>
     /// The canvas group associated with the menu
     /// </summary>
-    [SerializeField] private CanvasGroup _canvasGroup = null;
+    [SerializeField] private CanvasGroup _mainGroup = null;
+
+    /// <summary>
+    /// The canvas group for the control menu
+    /// </summary>
+    [SerializeField] private CanvasGroup _controlGroup = null;
 
     /// <summary>
     /// The duration label for the game-play
@@ -218,6 +253,31 @@ public class GameManager : MonoBehaviour
     /// How long the player has been playing the round
     /// </summary>
     [SerializeField] private float _roundDuration = 0f;
+
+    /// <summary>
+    /// The list of text colors
+    /// </summary>
+    [SerializeField] private Gradient _textColors = null;
+
+    /// <summary>
+    /// The background color for the winner screen
+    /// </summary>
+    [SerializeField] private Color _winnerBackColor = Color.green;
+
+    /// <summary>
+    /// The background color for the loser screen
+    /// </summary>
+    [SerializeField] private Color _loserBackColor = Color.red;
+
+    /// <summary>
+    /// The timer for the fading of background colors
+    /// </summary>
+    private float _backgroundFade = 0f;
+
+    /// <summary>
+    /// The amount of time in between openining menus
+    /// </summary>
+    private float _cooldown = 0f;
 
     /// <summary>
     /// The material for coloring each individual cube
@@ -337,7 +397,7 @@ public class GameManager : MonoBehaviour
                             _obj.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                             _mgr._text.text = "";
                             _mgr.isTrigger = false;
-                            _mgr.isFlagged = false;
+                            _mgr.state = CellState.Normal;
                             _mgr._isClicked = false;
                         }
                     }
@@ -376,7 +436,7 @@ public class GameManager : MonoBehaviour
         }
         if (Input.GetMouseButtonDown(1))
         {
-            ToggleFlag();
+            ToggleStates();
         }
     }
 
@@ -420,14 +480,12 @@ public class GameManager : MonoBehaviour
     /// </summary>
     private void _FadeOutMenu()
     {
-        _canvasGroup.blocksRaycasts = false;
-        _canvasGroup.interactable = false;
-        _canvasGroup.alpha -= (Time.deltaTime * 2f);
-        if (_canvasGroup.alpha <= 0f)
+        _mainGroup.blocksRaycasts = false;
+        _mainGroup.interactable = false;
+        _mainGroup.alpha -= (Time.deltaTime * 2f);
+        if (_mainGroup.alpha <= 0f)
         {
-            isPlaying = true;
             instance.OnLerpsTickEvent -= _FadeOutMenu;
-            instance.OnLerpsTickEvent += _RoundClock;
         }
     }
 
@@ -436,12 +494,56 @@ public class GameManager : MonoBehaviour
     /// </summary>
     private void _FadeInMenu()
     {
-        _canvasGroup.alpha += (Time.deltaTime * 2f);
-        if (_canvasGroup.alpha >= 1f)
+        _mainGroup.alpha += (Time.deltaTime * 2f);
+        if (_mainGroup.alpha >= 1f)
         {
-            _canvasGroup.blocksRaycasts = true;
-            _canvasGroup.interactable = true;
+            _mainGroup.blocksRaycasts = true;
+            _mainGroup.interactable = true;
             instance.OnLerpsTickEvent -= _FadeInMenu;
+            instance.OnLerpsTickEvent += _FadeToNormalBackground;
+        }
+    }
+
+    /// <summary>
+    /// Fades out the control group
+    /// </summary>
+    private void _FadeOutControls()
+    {
+        _controlGroup.blocksRaycasts = false;
+        _controlGroup.interactable = false;
+        _controlGroup.alpha -= (Time.deltaTime * 2f);
+        if (_controlGroup.alpha <= 0f)
+        {
+            instance.OnLerpsTickEvent -= _FadeOutControls;
+        }
+    }
+
+    /// <summary>
+    /// Fades in the control group
+    /// </summary>
+    private void _FadeInControls()
+    {
+        _controlGroup.alpha += (Time.deltaTime * 2f);
+        if (_controlGroup.alpha >= 1f)
+        {
+            _controlGroup.blocksRaycasts = true;
+            _controlGroup.interactable = true;
+            instance.OnLerpsTickEvent -= _FadeInControls;
+        }
+    }
+
+    /// <summary>
+    /// Starts the game timer after 1 second
+    /// </summary>
+    private void _StartGameTimer()
+    {
+        _cooldown = (_cooldown <= 0f) ? 1f : _cooldown;
+        _cooldown -= Time.deltaTime;
+        if (_cooldown <= 0f)
+        {
+            instance.OnLerpsTickEvent -= _StartGameTimer;
+            isPlaying = true;
+            instance.OnLerpsTickEvent += _RoundClock;
         }
     }
 
@@ -466,6 +568,44 @@ public class GameManager : MonoBehaviour
     {
         _roundDuration += Time.deltaTime;
         instance._durationLabel.text = Mathf.FloorToInt(_roundDuration).ToString();
+    }
+
+    /// <summary>
+    /// Fades the background to the winner color
+    /// </summary>
+    private void _FadeToNormalBackground()
+    {
+        _mainCamera.backgroundColor = Color.Lerp(_mainCamera.backgroundColor, Color.black, Time.deltaTime);
+        if (_mainCamera.backgroundColor.r < 0.05f && _mainCamera.backgroundColor.g < 0.05f && _mainCamera.backgroundColor.b < 0.05f)
+        {
+            instance.OnLerpsTickEvent -= _FadeToNormalBackground;
+        }
+    }
+
+    /// <summary>
+    /// Fades the background to the winner color
+    /// </summary>
+    private void _FadeToWinnerBackground()
+    {
+        _backgroundFade += Time.deltaTime;
+        _mainCamera.backgroundColor = Color.Lerp(Color.black, _winnerBackColor, _backgroundFade);
+        if (_backgroundFade >= 1f)
+        {
+            instance.OnLerpsTickEvent -= _FadeToWinnerBackground;
+        }
+    }
+
+    /// <summary>
+    /// Fades the background to the winner color
+    /// </summary>
+    private void _FadeToLoserBackground()
+    {
+        _backgroundFade += Time.deltaTime;
+        _mainCamera.backgroundColor = Color.Lerp(Color.black, _loserBackColor, _backgroundFade);
+        if (_backgroundFade >= 1f)
+        {
+            instance.OnLerpsTickEvent -= _FadeToLoserBackground;
+        }
     }
 
     #endregion
