@@ -161,7 +161,7 @@ public class GameManager : MonoBehaviour
     public void ToggleStates()
     {
         state = (state == CellState.Normal) ? CellState.Flagged : ((state == CellState.Flagged) ? CellState.Questioned : CellState.Normal);
-        _material.SetColor("_Color", (state == CellState.Normal) ? _defaultColor : ((state == CellState.Flagged) ? Color.red : Color.blue));
+        _material.SetColor("_BaseColor", (state == CellState.Normal) ? _defaultColor : ((state == CellState.Flagged) ? Color.red : Color.blue));
     }
 
     /// <summary>
@@ -386,7 +386,7 @@ public class GameManager : MonoBehaviour
         if (_type != ObjType.Cube) return;
         cubes.Add(this);
         _material = GetComponent<MeshRenderer>().material;
-        _defaultColor = _material.GetColor("_Color");
+        _defaultColor = _material.GetColor("_BaseColor");
         _collider = GetComponent<Collider>();
         _text = GetComponentInChildren<TMP_Text>();
     }
@@ -448,7 +448,7 @@ public class GameManager : MonoBehaviour
                             _obj.transform.localPosition = _cell;
                             _obj.SetActive(true);
                             _obj.GetComponent<Collider>().enabled = true;
-                            _obj.GetComponent<MeshRenderer>().material.SetColor("_Color", _mgr._defaultColor);
+                            _obj.GetComponent<MeshRenderer>().material.SetColor("_BaseColor", _mgr._defaultColor);
                             _obj.GetComponent<MeshRenderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
                             _mgr._text.text = "";
                             _mgr.isTrigger = false;
@@ -486,7 +486,7 @@ public class GameManager : MonoBehaviour
             }
             else
             {
-                _material.SetColor("_Color", Color.red);
+                _material.SetColor("_BaseColor", Color.red);
                 instance.LoseRound();
             }
         }
@@ -609,12 +609,13 @@ public class GameManager : MonoBehaviour
     /// </summary>
     private void _FadeOutCube()
     {
-        Color _col = _material.GetColor("_Color");
+        Color _col = _material.GetColor("_BaseColor");
         float _alpha = Mathf.Clamp(_col.a - (Time.deltaTime * 2f), (nearbyCount == 0) ? 0f : 0.05f, 1f);
-        _material.SetColor("_Color", new Color(_col.r, _col.g, _col.b, _alpha));
+        _material.SetColor("_BaseColor", new Color(_col.r, _col.g, _col.b, _alpha));
         if (_alpha <= ((nearbyCount == 0)? 0f : 0.05f))
         {
             instance.OnLerpsTickEvent -= _FadeOutCube;
+            //_material.SetInt("_Emission", 0);
         }
     }
 
